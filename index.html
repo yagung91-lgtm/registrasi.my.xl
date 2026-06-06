@@ -1,0 +1,124 @@
+<html lang="id"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Registrasi MyXL</title>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <div class="logo">
+        <img alt="Card-Image" loading="lazy" width="150" height="150" decoding="async" data-nimg="1" class="place-self-center w-30 h-30" 
+             src="/Icons-xl/document.svg"style="color: transparent;">
+        <div class="w-11/12 p-3 ml-2 text-left place-self-center">
+        <h3 class="font-bold">Non-Biometric Registration</h3>
+        <p class="text-sm md:text-base text-gray-800">
+        Registrasi dengan manual. Input tiap nomor identitas Anda pada field yang disediakan</p></div>
+      </div>
+      <h1>Registrasi NIK/KK MyXL</h1>
+      <div class="row">
+        <div>
+          <label>Nomor XL</label>
+          <input id="msisdn" placeholder="628xxx / 08xxx" inputmode="numeric" autocomplete="tel">
+          <div class="hint">Gunakan format 08xxxxxxxxxx atau 628xxxxxxxxxx</div>
+        </div>
+        <div>
+          <label>Nomor NIK</label>
+          <input id="nik" placeholder="16 digit NIK" inputmode="numeric" maxlength="16">
+        </div>
+         <div>
+          <label>Nomor KK</label>
+          <input id="kk" placeholder="16 digit KK" inputmode="numeric" maxlength="16">
+        </div>
+      </div>
+          <label>Nomor puk</label>
+          <input id="puk"placeholder="16 digit puk"inputmode="numeric" maxlength="16">
+        </div>
+      <div class="btns">
+        <button id="btnRegist" class="primary">REGISTRASI</button>
+      </div>
+      <label style="display:block;margin-top:12px">LOG RESPONSE:</label>
+      <textarea id="log" readonly=""></textarea>
+    </div>
+  </div>
+<script>
+var $=function(s){return document.querySelector(s);};
+var validMsisdn=function(v){return /^(?:08\d{8,13}|62\d{8,13})$/.test(String(v||""));};
+var validNikKk=function(v){return /^\d{16}$/.test(String(v||""));}; // Validasi 16 digit
+var formatWaktuID=function(d){
+  d=d||new Date();
+  var hari=["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"][d.getDay()];
+  var bln=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"][d.getMonth()];
+  var t=d.getDate(), y=d.getFullYear(), hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
+  return "["+hari+", "+t+" "+bln+" "+y+" | "+hh+":"+mm+"]";
+};
+// Modifikasi setLog untuk bisa menampilkan JSON dengan rapi
+var setLog=function(msg, isJson){
+  var formattedMsg;
+  if (isJson) {
+    try { formattedMsg = JSON.stringify(msg, null, 2); } 
+    catch(e) { formattedMsg = String(msg); }
+  } else {
+    formattedMsg = String(msg);
+  }
+  $("#log").value = formatWaktuID()+"\n"+formattedMsg;
+};
+var NOISE_PATHS=["/get_index","/get_request","/get_main","/get_start","/get_config","/get_bundle","/get_data","/get_meta","/get_info","/get_ping","/get_stream","/get_boot","/get_assets","/get_json","/get_html","/get_css"];
+function noiseTriple(){
+  var arr=NOISE_PATHS.slice().sort(function(){return Math.random()-0.5;}).slice(0,3);
+  arr.forEach(function(p,i){ setTimeout(function(){ fetch(p+"?n="+i+"&t="+Date.now(),{method:"GET",cache:"no-store"}).catch(function(){}); }, i*70); });
+}
+// Modifikasi pickMessage untuk mengambil pesan error dari berbagai format
+function pickMessage(raw){
+  try{
+    if (typeof raw !== 'object' || raw === null) return String(raw || "Operasi selesai.");
+    return raw.ui_message || raw.message || raw.error || (raw.errors && raw.errors[0] && raw.errors[0].message) || JSON.stringify(raw);
+  }catch(e){ return "Unknown response"; }
+}
+
+// Event listener baru untuk tombol Registrasi
+$("#btnRegist").addEventListener("click", async function(){
+  var msisdn=$("#msisdn").value.trim();
+  var nik=$("#nik").value.trim();
+  var kk=$("#kk").value.trim();
+  var puk=$("#puk").value.trim();
+
+  if(!validMsisdn(msisdn)) return alert("Nomor XL tidak valid. (Contoh: 0819...)");
+  if(!validNikKk(nik)) return alert("Nomor NIK tidak valid. (Harus 16 digit angka)");
+  if(!validNikKk(kk)) return alert("Nomor KK tidak valid. (Harus 16 digit angka)");
+  if(!validNikKk(puk)) return alert("Nomor puk tidak valid. (Harus 16 digit angka)");
+  
+  $("#btnRegist").disabled=true;
+  noiseTriple(); // Menjalankan "tema"
+  setLog("Mengirim data registrasi...", false);
+
+  try{
+    var r = await fetch("/registrasi",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({msisdn:msisdn, nik:nik, kk:kk})
+    });
+    
+    var txt = await r.text(); 
+    var j; 
+    try { j = JSON.parse(txt); }
+    catch(e) { j = { ui_message: "GAGAL MENGHUBUNGI API", raw: txt }; }
+
+    setLog(j, true); // Tampilkan full JSON response di log
+    
+    // Tampilkan pesan yang lebih ramah di alert
+    if (r.status === 200 && j.ok === true) {
+        alert("Registrasi Berhasil!");
+    } else {
+        alert(pickMessage(j)); // Tampilkan pesan error
+    }
+
+  }catch(e){
+    var errorMsg = "⚠️ Gagal menghubungi server (catch): " + String(e);
+    setLog(errorMsg, false);
+    alert(errorMsg);
+  }finally{
+    $("#btnRegist").disabled=false;
+  }
+});
+</script>
+</body></html>
